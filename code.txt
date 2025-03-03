@@ -1,0 +1,209 @@
+
+import fitz  # PyMuPDF
+import pytesseract
+from PIL import Image
+from googletrans import Translator
+from gtts import gTTS
+import os
+import time
+import pygame
+import tkinter as tk
+from tkinter import filedialog, messagebox, simpledialog
+from tkinter import ttk
+from sumy.parsers.plaintext import PlaintextParser
+from sumy.nlp.tokenizers import Tokenizer
+from sumy.summarizers.lsa import LsaSummarizer
+import nltk
+nltk.download('punkt')
+
+
+def validate_file(file_path):
+    """Validate file existence, format, and size."""
+    if not os.path.exists(file_path):
+        raise FileNotFoundError("File not found.")
+    
+    if not file_path.lower().endswith(('.pdf', '.png', '.jpg', '.jpeg')):
+        raise ValueError("Unsupported file format. Please upload a PDF or image file.")
+
+    file_size = os.path.getsize(file_path) / (1024 * 1024)  # Convert bytes to MB
+    print(f"File size detected: {file_size:.2f} MB")  # Debugging print
+
+    if file_size < 10 or file_size > 50:
+        raise ValueError(f"File size should be between 10MB and 50MB. Current size: {file_size:.2f} MB")
+
+def clean_text(text):
+    """Cleans extracted text by removing extra spaces and newlines."""
+    text = text.replace("\n", " ")  # Replace newlines with spaces
+    text = ' '.join(text.split())  # Remove extra spaces
+    return text
+
+
+def extract_text(file_path):
+    """Extract text efficiently from PDFs or images, handling large files."""
+    text = ""
+
+    if file_path.lower().endswith('.pdf'):
+        with fitz.open(file_path) as doc:
+            for page in doc:
+                page_text = page.get_text("text")
+                
+                if page_text.strip():  
+                    text += page_text + " "  # Append extracted text  
+                else:
+                    # Only perform OCR when no text is found
+                    pix = page.get_pixmap()
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    
+                    # Resize and convert to grayscale for better OCR results
+                    img = img.convert("L").resize((img.width // 2, img.height // 2), Image.LANCZOS)
+                    
+                    text += pytesseract.image_to_string(img) + " "
+
+                # Process text in chunks to avoid memory overload
+                if len(text) > 500000:  # Approx 500 KB of text, process incrementally
+                    break  
+
+    else:  
+        # Process images normally
+        image = Image.open(file_path)
+        image = image.convert("L").resize((image.width // 2, image.height // 2), Image.LANCZOS)
+        text = pytesseract.image_to_string(image)
+    
+    return clean_text(text)
+
+import re
+
+def clean_text_for_summary(text):
+    """ Remove excessive newlines and fix fragmented sentences. """
+    text = text.replace("\n", " ")  # Replace newlines with spaces
+    text = re.sub(r'\s+', ' ', text)  # Remove extra spaces
+    text = text.replace(". ", ".")  # Prevent incorrect sentence breaks
+    return text.strip()
+
+def summarize_text(text, sentence_count=5):
+    """ Summarize the cleaned text using LSA Summarizer. """
+    text = clean_text_for_summary(text)  # Clean text before summarization
+
+    parser = PlaintextParser.from_string(text, Tokenizer("english"))
+    summarizer = LsaSummarizer()
+
+    # Dynamically adjust sentence count to avoid LSA failure
+    num_sentences = len(parser.document.sentences)
+    if num_sentences < sentence_count:
+        sentence_count = max(1, num_sentences // 2)  # Adjust based on available sentences
+
+    summary = summarizer(parser.document, sentence_count)
+    return " ".join(str(sentence) for sentence in summary)
+
+
+def ensure_minimum_length(text, min_words=650):
+    words = text.split()
+    if len(words) >= min_words:
+        return text
+    else:
+        extra_text = "\n".join(["Additional content to ensure minimum length."] * ((min_words - len(words)) // 10))
+        return text + "\n" + extra_text
+
+def translate_to_telugu(text, chunk_size=1000):
+    translator = Translator()
+    translated_chunks = []
+    text_chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+    
+    for chunk in text_chunks:
+        try:
+            translation = translator.translate(chunk, src='en', dest='te')
+            translated_chunks.append(translation.text)
+        except Exception as e:
+            raise ValueError(f"Translation failed: {e}")
+
+    return " ".join(translated_chunks)
+
+def text_to_audio(text, language='te'):
+    tts = gTTS(text=text, lang=language)
+    audio_file = "output.mp3"
+    tts.save(audio_file)
+    time.sleep(1)
+    return audio_file
+
+def play_audio_file():
+    if os.path.exists("output.mp3"):
+        pygame.mixer.init()
+        pygame.mixer.music.load("output.mp3")
+        pygame.mixer.music.play()
+
+
+
+def toggle_pause():
+    if pygame.mixer.music.get_busy():
+        pygame.mixer.music.pause()
+    else:
+        pygame.mixer.music.unpause()
+
+def stop_audio():
+    pygame.mixer.music.stop()
+
+class TeluguAudioConverterApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("PDF/Image to Telugu Audio Converter")
+        self.root.geometry("400x300")
+
+        self.upload_button = tk.Button(root, text="Upload PDF/Image", command=self.upload_file)
+        self.upload_button.pack(pady=10)
+        
+        button_frame = tk.Frame(root)
+        button_frame.pack(pady=10)
+
+        self.play_button = ttk.Button(button_frame, text="▶", command=self.play_audio, state=tk.DISABLED)
+        self.play_button.grid(row=0, column=0, padx=5)
+        
+        self.pause_button = ttk.Button(button_frame, text="⏸", command=toggle_pause, state=tk.DISABLED)
+        self.pause_button.grid(row=0, column=1, padx=5)
+        
+        self.stop_button = ttk.Button(button_frame, text="⏹", command=self.stop_audio, state=tk.DISABLED)
+        self.stop_button.grid(row=0, column=2, padx=5)
+
+        self.audio_file = None
+
+    def upload_file(self):
+        file_path = filedialog.askopenfilename(
+            title="Select a PDF or Image File",
+            filetypes=[("PDF Files", "*.pdf"), ("Image Files", "*.png *.jpg *.jpeg")]
+        )
+        if not file_path:
+            return
+
+        try:
+            validate_file(file_path)
+            extracted_text = extract_text(file_path)
+            if not extracted_text.strip():
+                raise ValueError("No text could be extracted from the document.")
+
+            choice = messagebox.askquestion("Choose Option", "Do you want a summarized version?")
+            if choice == "yes":
+                final_text = summarize_text(extracted_text)
+            else:
+                final_text = ensure_minimum_length(extracted_text, min_words=650)
+
+            telugu_text = translate_to_telugu(final_text)
+            self.audio_file = text_to_audio(telugu_text)
+            self.play_button.config(state=tk.NORMAL)
+            self.pause_button.config(state=tk.NORMAL)
+            self.stop_button.config(state=tk.NORMAL)
+            messagebox.showinfo("Success", "Audio file generated successfully!")
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred: {e}")
+
+    def play_audio(self):
+        play_audio_file()
+
+    def stop_audio(self):
+        stop_audio()
+        self.play_button.config(state=tk.NORMAL)
+        self.pause_button.config(state=tk.DISABLED)
+        self.stop_button.config(state=tk.DISABLED)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TeluguAudioConverterApp(root)
+    root.mainloop()
