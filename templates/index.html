@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>PDF to Telugu Audio</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Upload PDF or Image</h1>
+      <form method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" required />
+        <button class="button" type="submit">Convert to Audio</button>
+      </form>
+
+      {% if message %}
+      <div class="success">
+        <p>{{ message }}</p>
+        {% if audio_url %}
+        <a class="button" href="{{ audio_url }}">Download Audio</a>
+        {% endif %}
+      </div>
+      {% endif %} {% if error %}
+      <div class="error">
+        <p>{{ error }}</p>
+      </div>
+      {% endif %}
+    </div>
+  </body>
+</html>
