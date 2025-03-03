@@ -87,20 +87,21 @@ def index():
                     error = "No text extracted"
                 else:
                     telugu_text = translate_to_telugu(text)
-                    audio_path = text_to_audio(telugu_text)
-                    if audio_path:
-                        audio_url = f"/download/{os.path.basename(audio_path)}"
+                    audio_filename = text_to_audio(telugu_text)
+                    if audio_filename:
+                        audio_url = f"/download/{os.path.basename(audio_filename)}"
                         message = "Audio generated successfully"
                     else:
                         error = "Failed to generate audio"
             except Exception as e:
                 error = str(e)
             
-            os.remove(filepath) if os.path.exists(filepath) else None
+            if os.path.exists(filepath):
+                os.remove(filepath)
     
     return render_template(
-        'index.html',
-        message=message,
+        'index.html', 
+        message=message, 
         audio_url=audio_url,
         error=error
     )
