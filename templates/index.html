@@ -1,36 +1,45 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>PDF to Telugu Audio</title>
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='style.css') }}"
-    />
-  </head>
-  <body>
-    <div class="container">
-      <h1>Upload PDF or Image</h1>
-      <form method="post" enctype="multipart/form-data">
-        <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" required />
-        <button class="button" type="submit">Convert to Audio</button>
-      </form>
 
-      {% if message %}
-      <div class="success">
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Generator</title>
+</head>
+<body>
+    <h1>Upload File for Audio Conversion</h1>
+    <form action="/" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" required>
+        <button type="submit">Upload</button>
+    </form>
+    
+    {% if message %}
         <p>{{ message }}</p>
-        {% if audio_url %}
-        <audio controls controlsList="nodownload">
-          <source src="{{ audio_url }}" type="audio/mpeg" />
-          Your browser does not support the audio element.
+        <audio id="audioPlayer" controls>
+            <source src="{{ audio_url }}" type="audio/mpeg">
+            Your browser does not support the audio element.
         </audio>
-        <a class="button" href="{{ audio_url }}">Download Audio</a>
-        {% endif %}
-      </div>
-      {% endif %} {% if error %}
-      <div class="error">
-        <p>{{ error }}</p>
-      </div>
-      {% endif %}
-    </div>
-  </body>
+        <br>
+        <button onclick="playAudio()">Play</button>
+        <button onclick="pauseAudio()">Pause</button>
+        <a href="{{ audio_url }}" download>
+            <button>Download Audio</button>
+        </a>
+    {% endif %}
+
+    {% if error %}
+        <p style="color: red;">{{ error }}</p>
+    {% endif %}
+
+    <script>
+        function playAudio() {
+            document.getElementById("audioPlayer").play();
+        }
+        
+        function pauseAudio() {
+            document.getElementById("audioPlayer").pause();
+        }
+    </script>
+</body>
 </html>
